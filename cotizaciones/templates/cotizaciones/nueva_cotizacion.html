@@ -1,0 +1,668 @@
+{% extends "productos/base.html" %}
+{% block title %}Cotizador — Maxi Plásticos{% endblock %}
+
+{% block content %}
+
+<!-- ─── HEADER ─── -->
+<div class="page-header" style="margin-bottom: 0.8rem;">
+  <div>
+    <h1 style="margin-bottom: 0.2rem;">Cotizador</h1>
+    <p id="header-sub" style="font-size: 0.85rem; color: #555; margin: 0;">
+      {% if cotizacion %}
+        <strong>{{ cotizacion.numero }}</strong> · {{ cotizacion.cliente_nombre }}
+      {% else %}
+        Inicia una cotización para comenzar
+      {% endif %}
+    </p>
+  </div>
+  <a href="{% url 'lista_productos' %}" class="btn btn-outline btn-sm">← Catálogo</a>
+</div>
+
+<!-- ─── LAYOUT PRINCIPAL ─── -->
+<div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 1rem; align-items: start;">
+
+  <!-- ════════ PANEL IZQUIERDO: Buscador + Lista ════════ -->
+  <div>
+    <div class="card" style="padding: 0.8rem;">
+      <input
+        type="text"
+        id="buscador"
+        class="form-control"
+        placeholder="Buscar producto por nombre o categoría…"
+        style="margin-bottom: 0.6rem;"
+        autocomplete="off"
+      >
+      <div style="font-size: 0.78rem; color: #888; margin-bottom: 0.5rem;">
+        <span id="conteo-filtro"></span>
+      </div>
+      <div id="lista-productos"
+           style="max-height: 72vh; overflow-y: auto; display: flex; flex-direction: column; gap: 0.4rem;">
+        <p style="color:#aaa; text-align:center; padding: 1rem;">Cargando productos…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ PANEL DERECHO: Calculadora + Carrito ════════ -->
+  <div style="position: sticky; top: 1rem;">
+
+    <!-- ── Sin cotización activa: formulario de inicio ── -->
+    <div id="panel-inicio" class="card" style="display:{% if cotizacion %}none{% else %}block{% endif %}; margin-bottom: 1rem;">
+      <div style="text-align: center; margin-bottom: 1rem;">
+        <p style="font-size: 1.5rem; margin-bottom: 0.4rem;">🛒</p>
+        <h3 style="margin-bottom: 0.4rem;">¿Con quién hablamos?</h3>
+        <p style="font-size: 0.85rem; color: #666;">Ingresa tu nombre para empezar a cotizar</p>
+      </div>
+      <form id="form-nueva" method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="nueva">
+        <div class="form-group">
+          <label class="form-label">Tu nombre o empresa</label>
+          <input type="text" name="cliente_nombre" class="form-control"
+                 placeholder="Ej: Juan García · Tienda Los Pinos" required autofocus>
+        </div>
+        <button type="button" onclick="crearCotizacion()" class="btn btn-cta" style="width:100%; font-size: 1rem; padding: 0.8rem;">
+          Empezar a cotizar →
+        </button>
+      </form>
+    </div>
+
+    <!-- ── Calculadora (visible cuando hay producto seleccionado) ── -->
+    <div id="panel-calculadora" class="card" style="display:none; margin-bottom: 1rem; border-color: var(--maxi-teal);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; margin-bottom:0.6rem;">
+        <div>
+          <h3 id="calc-nombre" style="font-size: 1rem; margin: 0;"></h3>
+          <div id="calc-info" style="font-size: 0.78rem; color: #666; margin-top: 0.2rem;"></div>
+        </div>
+        <button onclick="cerrarCalculadora()" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:1.2rem;line-height:1;">✕</button>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.6rem;">
+        <label style="font-size: 0.85rem; font-weight: 700; white-space:nowrap;">Cantidad:</label>
+        <input
+          type="number"
+          id="calc-cantidad"
+          min="1"
+          value="1"
+          class="form-control"
+          style="width: 90px; font-size: 1.1rem; font-weight: 700; text-align: center;"
+          oninput="calcularPrecio()"
+        >
+        <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="setCantidad(1)">1</button>
+          <button class="btn btn-outline btn-sm" onclick="setCantidad(6)">6</button>
+          <button class="btn btn-outline btn-sm" onclick="setCantidad(12)">12</button>
+          <button class="btn btn-outline btn-sm" onclick="setCantidad(24)">24</button>
+        </div>
+      </div>
+
+      <!-- Resultado principal -->
+      <div id="calc-resultado"></div>
+
+      <!-- Escalera de precios -->
+      <div id="calc-escalas"></div>
+
+      <!-- Sugerencia inteligente -->
+      <div id="calc-tip"></div>
+
+      <!-- Botón agregar -->
+      <button id="btn-agregar" onclick="agregarAlCarrito()" class="btn btn-cta"
+              style="width: 100%; margin-top: 0.8rem; font-size: 1rem; padding: 0.7rem;">
+        + Agregar al pedido
+      </button>
+    </div>
+
+    <!-- ── Carrito / Resumen ── -->
+    <div id="panel-carrito" class="card">
+      {% if cotizacion %}
+        <div id="carrito-contenido">
+          <!-- Se puebla por JS -->
+          <p style="color:#aaa; text-align:center; padding:1rem;">Cargando…</p>
+        </div>
+      {% else %}
+        <div style="text-align:center; color:#aaa; padding: 2rem;">
+          <p style="font-size: 1.5rem; margin-bottom: 0.5rem;">🛒</p>
+          <p>El pedido aparecerá aquí</p>
+        </div>
+      {% endif %}
+    </div>
+
+  </div><!-- fin panel derecho -->
+</div>
+
+<!-- Notificación flotante -->
+<div id="flash-msg" style="display:none; position:fixed; top:1rem; right:1rem; z-index:9999;
+     padding:0.8rem 1.2rem; border-radius:10px; font-weight:700; font-size:0.9rem;
+     box-shadow:0 4px 16px rgba(0,0,0,0.2); transition: opacity 0.3s;"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ══════════════════════════════════════════════
+//  DATOS DESDE DJANGO
+// ══════════════════════════════════════════════
+const PRODUCTOS = {{ productos_json|safe }};
+let cotizacion  = {{ cotizacion_json|safe }};
+const CSRF      = '{{ csrf_token }}';
+
+// ══════════════════════════════════════════════
+//  ESTADO
+// ══════════════════════════════════════════════
+let productoSel = null;
+let calcTimer   = null;
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  renderizarLista(PRODUCTOS);
+  if (cotizacion) renderizarCarrito(cotizacion);
+
+  // Si viene desde el catálogo con ?producto=ID, auto-seleccionar
+  const params = new URLSearchParams(window.location.search);
+  const productoParam = parseInt(params.get('producto'));
+  if (productoParam) {
+    // Pequeño delay para que el DOM esté listo
+    setTimeout(() => {
+      seleccionarProducto(productoParam);
+      // Enfocar el buscador con el nombre del producto para contexto
+      const prod = PRODUCTOS.find(p => p.id === productoParam);
+      if (prod) {
+        document.getElementById('buscador').value = prod.nombre;
+        renderizarLista([prod]); // mostrar solo ese producto en la lista
+      }
+    }, 100);
+  }
+
+  document.getElementById('buscador').addEventListener('input', function () {
+    const q = this.value.toLowerCase().trim();
+    const filtrados = q.length >= 1
+      ? PRODUCTOS.filter(p =>
+          p.nombre.toLowerCase().includes(q) ||
+          p.categoria.toLowerCase().includes(q))
+      : PRODUCTOS;
+    renderizarLista(filtrados);
+  });
+});
+
+// ══════════════════════════════════════════════
+//  LISTA DE PRODUCTOS
+// ══════════════════════════════════════════════
+function renderizarLista(lista) {
+  const contenedor = document.getElementById('lista-productos');
+  document.getElementById('conteo-filtro').textContent =
+    lista.length === PRODUCTOS.length
+      ? `${PRODUCTOS.length} productos`
+      : `${lista.length} de ${PRODUCTOS.length} productos`;
+
+  if (lista.length === 0) {
+    contenedor.innerHTML = `<p style="color:#aaa;text-align:center;padding:1rem;">Sin resultados.</p>`;
+    return;
+  }
+
+  contenedor.innerHTML = lista.map(p => {
+    const tieneEscalas = p.escalas && p.escalas.length > 0;
+    const sel = productoSel && productoSel.id === p.id;
+    return `
+      <div class="producto-item${sel ? ' selected' : ''}"
+           data-id="${p.id}"
+           onclick="seleccionarProducto(${p.id})"
+           style="border: 1.5px solid ${sel ? 'var(--maxi-rojo-cta)' : 'var(--maxi-teal)'};
+                  border-radius: 10px; padding: 0.65rem 0.8rem;
+                  background: ${sel ? '#fff8f8' : 'var(--maxi-blanco)'};
+                  cursor: pointer; transition: all 0.15s;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+          <div style="min-width:0;">
+            <strong style="font-size: 0.88rem; display:block; white-space:nowrap;
+                           overflow:hidden; text-overflow:ellipsis;">${p.nombre}</strong>
+            <span style="font-size: 0.73rem; color: #777;">
+              ${p.categoria ? `<span style="background:var(--maxi-teal);color:var(--maxi-verde-bosque);border-radius:4px;padding:1px 5px;margin-right:4px;">${p.categoria}</span>` : ''}
+              $${fmt(p.precio_unitario)}/u · paq ${p.unidad_paquete} uds
+              ${tieneEscalas ? `· <span style="color:var(--maxi-verde-marca);font-weight:600;">${p.escalas.length} escala${p.escalas.length > 1 ? 's' : ''}</span>` : ''}
+            </span>
+          </div>
+          <button class="btn btn-sm btn-verde" style="white-space:nowrap; flex-shrink:0;"
+                  onclick="event.stopPropagation(); seleccionarProducto(${p.id})">
+            Calcular →
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  SELECCIONAR PRODUCTO
+// ══════════════════════════════════════════════
+function seleccionarProducto(id) {
+  productoSel = PRODUCTOS.find(p => p.id === id);
+  if (!productoSel) return;
+
+  // Resaltar en lista
+  document.querySelectorAll('.producto-item').forEach(el => {
+    const esEste = parseInt(el.dataset.id) === id;
+    el.style.border = `1.5px solid ${esEste ? 'var(--maxi-rojo-cta)' : 'var(--maxi-teal)'}`;
+    el.style.background = esEste ? '#fff8f8' : 'var(--maxi-blanco)';
+  });
+
+  // Info del producto
+  document.getElementById('calc-nombre').textContent = productoSel.nombre;
+  document.getElementById('calc-info').innerHTML =
+    `Precio paquete: <strong>$${fmt(productoSel.precio_base)}</strong> ·
+     Uds/paquete: <strong>${productoSel.unidad_paquete}</strong> ·
+     Precio/unidad base: <strong>$${fmt(productoSel.precio_unitario)}</strong>
+     ${productoSel.unidad_paquete === 1 && productoSel.precio_base > 5000
+       ? `<span style="color:var(--maxi-rojo-cta); font-weight:700;"> ⚠ Verifica las unidades del paquete</span>`
+       : ''}`;
+
+  document.getElementById('panel-calculadora').style.display = 'block';
+  document.getElementById('calc-cantidad').value = 1;
+  calcularPrecio();
+  document.getElementById('calc-cantidad').focus();
+}
+
+function cerrarCalculadora() {
+  document.getElementById('panel-calculadora').style.display = 'none';
+  productoSel = null;
+  document.querySelectorAll('.producto-item').forEach(el => {
+    el.style.border = '1.5px solid var(--maxi-teal)';
+    el.style.background = 'var(--maxi-blanco)';
+  });
+}
+
+function setCantidad(n) {
+  document.getElementById('calc-cantidad').value = n;
+  calcularPrecio();
+}
+
+// ══════════════════════════════════════════════
+//  CALCULADORA EN VIVO (lógica local)
+// ══════════════════════════════════════════════
+function calcularPrecio() {
+  if (!productoSel) return;
+  clearTimeout(calcTimer);
+  calcTimer = setTimeout(_calcular, 120);
+}
+
+function _calcular() {
+  const cantidad = parseInt(document.getElementById('calc-cantidad').value) || 0;
+  if (cantidad < 1) return;
+
+  const { precio, escala, siguiente } = escalaParaCantidad(productoSel, cantidad);
+  const subtotal = precio * cantidad;
+
+  document.getElementById('calc-resultado').innerHTML = `
+    <div style="background: #f0f9f0; border-radius: 12px; padding: 1rem; margin: 0.5rem 0; border: 1px solid var(--maxi-teal);">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+        <div style="text-align:center; padding:0.6rem; background:white; border-radius:8px;">
+          <div style="font-size:0.72rem; color:#777; margin-bottom:4px;">Precio por unidad</div>
+          <div style="font-size:1.4rem; font-weight:800; color:var(--maxi-verde-bosque);">$${fmt(precio)}</div>
+          ${escala
+            ? `<span class="badge" style="font-size:0.65rem;">${escala.nombre}</span>`
+            : '<span style="font-size:0.72rem;color:#aaa;">precio unitario</span>'}
+        </div>
+        <div style="text-align:center; padding:0.6rem; background:white; border-radius:8px;">
+          <div style="font-size:0.72rem; color:#777; margin-bottom:4px;">Total por ${cantidad} unidad${cantidad !== 1 ? 'es' : ''}</div>
+          <div style="font-size:1.4rem; font-weight:800; color:var(--maxi-rojo-cta);">$${fmt(subtotal)}</div>
+          <div style="font-size:0.72rem; color:#aaa;">${cantidad} × $${fmt(precio)}</div>
+        </div>
+      </div>
+    </div>`;
+
+  mostrarEscalas(productoSel, cantidad, precio);
+  mostrarTip(siguiente, precio, productoSel, cantidad);
+}
+
+// ══════════════════════════════════════════════
+//  LÓGICA DE ESCALAS (local, sin AJAX)
+// ══════════════════════════════════════════════
+function escalaParaCantidad(producto, cantidad) {
+  const escalas = producto.escalas; // ya ordenadas por min
+  let escalaAplicada = null;
+  let siguiente = null;
+
+  for (const e of escalas) {
+    if (cantidad >= e.min && (e.max === null || cantidad <= e.max)) {
+      escalaAplicada = e;
+    }
+  }
+  for (const e of escalas) {
+    if (e.min > cantidad) { siguiente = e; break; }
+  }
+
+  const precio = escalaAplicada ? escalaAplicada.precio : producto.precio_unitario;
+  return { precio, escala: escalaAplicada, siguiente };
+}
+
+function mostrarEscalas(producto, cantidad, precioActual) {
+  const escalas = producto.escalas;
+  if (escalas.length === 0) {
+    document.getElementById('calc-escalas').innerHTML = '';
+    return;
+  }
+
+  let html = `<div style="margin: 0.4rem 0;">
+    <div style="font-size:0.78rem; font-weight:700; color:#555; margin-bottom:0.4rem;">
+      Escalas de precio:
+    </div>
+    <div style="display:flex; flex-direction:column; gap:0.25rem;">`;
+
+  // Nivel base (si el primer escalón no empieza en 1)
+  if (escalas[0].min > 1) {
+    const activo = cantidad < escalas[0].min;
+    html += escalaTier(
+      `1–${escalas[0].min - 1}`, producto.precio_unitario, 'base',
+      activo, false, escalas[0].min - cantidad
+    );
+  }
+
+  escalas.forEach((e, i) => {
+    const activo = cantidad >= e.min && (e.max === null || cantidad <= e.max);
+    const pasado = !activo && cantidad > (e.max || 0);
+    const falta  = e.min > cantidad ? e.min - cantidad : 0;
+    const rango  = e.max ? `${e.min}–${e.max}` : `${e.min}+`;
+    html += escalaTier(rango, e.precio, e.nombre, activo, pasado, falta);
+  });
+
+  html += '</div></div>';
+  document.getElementById('calc-escalas').innerHTML = html;
+}
+
+function escalaTier(rango, precio, nombre, activo, pasado, falta) {
+  const dotColor = activo ? 'var(--maxi-rojo-cta)' : pasado ? '#ccc' : 'var(--maxi-teal)';
+  const rowBg    = activo ? 'background:#fff0f2; border:1px solid var(--maxi-rojo-cta); border-radius:6px;' : '';
+  return `
+    <div style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0.4rem; ${rowBg}">
+      <span style="width:9px; height:9px; border-radius:50%; background:${dotColor}; flex-shrink:0;"></span>
+      <span style="font-size:0.8rem; ${activo ? 'font-weight:700;' : 'color:#666;'}">
+        ${rango} uds — <strong>$${fmt(precio)}/u</strong>
+        <span style="font-size:0.72rem; color:#888; margin-left:4px;">${nombre}</span>
+      </span>
+      ${activo
+        ? `<span style="margin-left:auto; background:var(--maxi-rojo-cta); color:white;
+                        border-radius:4px; padding:1px 6px; font-size:0.68rem; font-weight:700;">APLICA</span>`
+        : falta > 0
+        ? `<span style="margin-left:auto; font-size:0.72rem; color:var(--maxi-teal); font-weight:600;">
+             faltan ${falta}</span>`
+        : ''}
+    </div>`;
+}
+
+function mostrarTip(siguiente, precioActual, producto, cantidad) {
+  const div = document.getElementById('calc-tip');
+  if (!siguiente || !siguiente.min) { div.innerHTML = ''; return; }
+
+  const faltan      = siguiente.min - cantidad;
+  const ahorroPorU  = precioActual - siguiente.precio;
+  if (ahorroPorU <= 0) { div.innerHTML = ''; return; }
+
+  const ahorroTotal = ahorroPorU * siguiente.min;
+
+  div.innerHTML = `
+    <div style="background:#fff9e6; border:1px solid #ffd54f; border-radius:8px;
+                padding:0.6rem 0.8rem; font-size:0.82rem; color:#5d4037; margin-top:0.4rem;">
+      <strong>💡 Consejo de venta:</strong>
+      Comprando <strong>${faltan} unidad${faltan !== 1 ? 'es' : ''} más</strong>
+      (total <strong>${siguiente.min}</strong>),
+      aplica escala <strong>${siguiente.nombre}</strong> a <strong>$${fmt(siguiente.precio)}/u</strong>.
+      <br>El cliente ahorraría <strong>$${fmt(ahorroTotal)}</strong> en ese pedido.
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+//  CREAR COTIZACIÓN (AJAX)
+// ══════════════════════════════════════════════
+async function crearCotizacion() {
+  const form   = document.getElementById('form-nueva');
+  const nombre = form.querySelector('[name=cliente_nombre]').value.trim();
+  const notas  = form.querySelector('[name=notas]')?.value.trim() || '';
+  if (!nombre) {
+    form.querySelector('[name=cliente_nombre]').focus();
+    flash('Ingresa tu nombre para comenzar.', 'warning');
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append('action', 'nueva');
+  fd.append('cliente_nombre', nombre);
+  fd.append('notas', notas);
+  fd.append('csrfmiddlewaretoken', CSRF);
+
+  try {
+    const r = await fetch(window.location.href, {
+      method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: fd,
+    });
+    if (!r.ok) { flash('Error del servidor. Intenta de nuevo.', 'error'); return; }
+    const d = await r.json();
+    if (d.ok) {
+      cotizacion = d.cotizacion;
+      document.getElementById('panel-inicio').style.display = 'none';
+      document.getElementById('header-sub').innerHTML =
+        `<strong>${d.numero}</strong> · ${d.cliente}`;
+      renderizarCarrito(cotizacion);
+      flash(`Cotizacion ${d.numero} iniciada.`, 'success');
+    } else {
+      flash(d.error || 'Error al crear cotizacion.', 'error');
+    }
+  } catch (e) {
+    flash('Error de conexion. Intenta de nuevo.', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  AGREGAR AL CARRITO (AJAX)
+// ══════════════════════════════════════════════
+async function agregarAlCarrito() {
+  if (!productoSel) return;
+  const cantidad = parseInt(document.getElementById('calc-cantidad').value);
+  if (!cantidad || cantidad < 1) return;
+
+  // Si no hay cotizacion activa, pedir nombre primero
+  if (!cotizacion) {
+    const nombre = prompt('Para agregar al pedido, ingresa tu nombre o empresa:');
+    if (!nombre || !nombre.trim()) return;
+    const fd0 = new FormData();
+    fd0.append('action', 'nueva');
+    fd0.append('cliente_nombre', nombre.trim());
+    fd0.append('csrfmiddlewaretoken', CSRF);
+    const r0 = await fetch(window.location.href, {
+      method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: fd0,
+    });
+    if (!r0.ok) { flash('Error al iniciar cotización.', 'error'); return; }
+    const d0 = await r0.json();
+    if (!d0.ok) { flash(d0.error || 'Error.', 'error'); return; }
+    cotizacion = d0.cotizacion;
+    document.getElementById('panel-inicio').style.display = 'none';
+    document.getElementById('header-sub').innerHTML =
+      `<strong>${d0.numero}</strong> · ${d0.cliente}`;
+  }
+
+  const btn = document.getElementById('btn-agregar');
+  btn.disabled = true;
+  btn.textContent = 'Agregando…';
+
+  const fd = new FormData();
+  fd.append('action', 'agregar_item');
+  fd.append('producto_id', productoSel.id);
+  fd.append('cantidad', cantidad);
+  fd.append('csrfmiddlewaretoken', CSRF);
+
+  try {
+    const r = await fetch(window.location.href, {
+      method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: fd,
+    });
+    const d = await r.json();
+    if (d.ok) {
+      cotizacion = d.cotizacion;
+      renderizarCarrito(cotizacion);
+      flash(d.mensaje || 'Agregado al pedido.', 'success');
+      // Recalcular para mostrar el precio actualizado si la cantidad cambió
+      calcularPrecio();
+    } else {
+      flash(d.error || 'Error al agregar.', 'error');
+    }
+  } catch (e) {
+    flash('Error de conexión.', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '+ Agregar al pedido';
+}
+
+// ══════════════════════════════════════════════
+//  ELIMINAR DEL CARRITO (AJAX)
+// ══════════════════════════════════════════════
+async function eliminarItem(pk) {
+  if (!confirm('¿Quitar este producto del pedido?')) return;
+
+  const fd = new FormData();
+  fd.append('csrfmiddlewaretoken', CSRF);
+
+  try {
+    const r = await fetch(`/cotizaciones/item/${pk}/eliminar/`, {
+      method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: fd,
+    });
+    const d = await r.json();
+    if (d.ok) {
+      cotizacion = d.cotizacion;
+      renderizarCarrito(cotizacion);
+      flash('Producto eliminado del pedido.', 'success');
+    }
+  } catch (e) {
+    flash('Error al eliminar.', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  RENDERIZAR CARRITO
+// ══════════════════════════════════════════════
+function renderizarCarrito(cot) {
+  const contenedor = document.getElementById('panel-carrito');
+
+  if (!cot || cot.items.length === 0) {
+    contenedor.innerHTML = `
+      <div style="text-align:center; color:#aaa; padding:1.5rem;">
+        <p style="font-size:1.4rem; margin-bottom:0.4rem;">🛒</p>
+        <p style="font-size:0.88rem;">Selecciona un producto y agrégalo al pedido.</p>
+      </div>`;
+    return;
+  }
+
+  const filas = cot.items.map(item => `
+    <tr>
+      <td style="font-size:0.82rem; max-width:140px;">
+        <span title="${item.producto_nombre}"
+              style="display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:140px; font-weight:600;">
+          ${item.producto_nombre}
+        </span>
+        <span class="badge" style="font-size:0.65rem;">${item.escala}</span>
+      </td>
+      <td style="text-align:center; font-weight:700;">${item.cantidad}</td>
+      <td style="text-align:right; font-size:0.8rem; color:#666;">$${fmt(item.precio_unitario)}</td>
+      <td style="text-align:right; font-weight:700; color:var(--maxi-verde-bosque);">$${fmt(item.subtotal)}</td>
+      <td>
+        <button onclick="eliminarItem(${item.pk})"
+                title="Quitar"
+                style="background:none;border:none;color:var(--maxi-rojo-cta);cursor:pointer;
+                       font-size:1.1rem;font-weight:700;padding:0 2px;line-height:1;">✕</button>
+      </td>
+    </tr>`).join('');
+
+  contenedor.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+      <strong style="font-size:0.9rem;">Mi cotización</strong>
+      <span style="font-size:0.78rem; color:#888;">${cot.items.length} producto${cot.items.length !== 1 ? 's' : ''}</span>
+    </div>
+    <div style="overflow-x:auto; margin-bottom:0.6rem;">
+      <table style="font-size:0.82rem; width:100%;">
+        <thead>
+          <tr>
+            <th>Producto</th>
+            <th>Cant</th>
+            <th>$/u</th>
+            <th>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+    <div style="border-top:2px solid var(--maxi-teal); padding-top:0.7rem; margin-bottom:0.8rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:700; font-size:1rem;">TOTAL:</span>
+        <span style="font-size:1.6rem; font-weight:800; color:var(--maxi-rojo-cta);">$${fmt(cot.total)}</span>
+      </div>
+    </div>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <button onclick="enviarWhatsApp()" class="btn btn-verde" style="flex:1; font-size:0.95rem;">
+        Enviar por WhatsApp
+      </button>
+      <button onclick="verResumen()" class="btn btn-cta" style="flex:1; font-size:0.95rem;">
+        Ver resumen / PDF
+      </button>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+//  WHATSAPP DESDE EL CARRITO (sin guardar aún)
+// ══════════════════════════════════════════════
+function enviarWhatsApp() {
+  if (!cotizacion || cotizacion.items.length === 0) {
+    flash('Agrega al menos un producto primero.', 'warning');
+    return;
+  }
+  let msg = `*Cotización Maxi Plásticos*\n`;
+  msg += `Hola, me llamo *${cotizacion.cliente}*.\n`;
+  msg += `Quisiera cotizar lo siguiente:\n\n`;
+  cotizacion.items.forEach(item => {
+    msg += `• ${item.cantidad}x ${item.producto_nombre}`;
+    if (item.escala && item.escala !== 'Precio base') msg += ` (${item.escala})`;
+    msg += ` → *$${Math.round(item.subtotal).toLocaleString('es-CO')}*\n`;
+  });
+  msg += `\n*TOTAL: $${Math.round(cotizacion.total).toLocaleString('es-CO')}*\n`;
+  msg += `\n_Enviado desde maxiplasticos.com_`;
+  window.open(`https://wa.me/573006952453?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// ══════════════════════════════════════════════
+//  VER RESUMEN / PDF
+// ══════════════════════════════════════════════
+async function verResumen() {
+  if (!cotizacion || cotizacion.items.length === 0) {
+    flash('Agrega al menos un producto primero.', 'warning');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('action', 'finalizar');
+  fd.append('csrfmiddlewaretoken', CSRF);
+  try {
+    const r = await fetch(window.location.href, {
+      method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: fd,
+    });
+    const d = await r.json();
+    if (d.ok) window.location.href = d.redirect;
+  } catch (e) {
+    flash('Error al guardar.', 'error');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  UTILIDADES
+// ══════════════════════════════════════════════
+function fmt(n) {
+  return Math.round(n).toLocaleString('es-CO');
+}
+
+function flash(msg, tipo) {
+  const el = document.getElementById('flash-msg');
+  el.textContent = msg;
+  el.style.background = tipo === 'success' ? 'var(--maxi-verde-marca)'
+                      : tipo === 'warning'  ? '#e6a817'
+                      : 'var(--maxi-rojo-cta)';
+  el.style.color = 'white';
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.style.display = 'none', 300); }, 2800);
+}
+</script>
+{% endblock %}

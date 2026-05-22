@@ -1,0 +1,107 @@
+{% extends "productos/base.html" %}
+
+{% block title %}{% if editando %}Editar{% else %}Nuevo{% endif %} Producto — Maxi Plásticos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{% if editando %}Editar producto{% else %}Nuevo producto{% endif %}</h1>
+  <a href="{% url 'lista_productos' %}" class="btn btn-outline">← Volver</a>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+
+    <div class="card">
+      <h3 style="margin-bottom: 1rem;">Información del producto</h3>
+
+      <div class="form-group">
+        <label class="form-label">Nombre *</label>
+        {{ form.nombre }}
+        {% if form.nombre.errors %}<p style="color:red;font-size:0.8rem;">{{ form.nombre.errors.0 }}</p>{% endif %}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descripción</label>
+        {{ form.descripcion }}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoría</label>
+        {{ form.categoria }}
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem;">
+        <div class="form-group">
+          <label class="form-label">Costo del paquete *</label>
+          {{ form.costo }}
+          {% if form.costo.errors %}<p style="color:red;font-size:0.8rem;">{{ form.costo.errors.0 }}</p>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Precio base del paquete *</label>
+          {{ form.precio_base }}
+          {% if form.precio_base.errors %}<p style="color:red;font-size:0.8rem;">{{ form.precio_base.errors.0 }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Unidades por paquete *</label>
+        {{ form.unidad_paquete }}
+        <small style="color:#777; font-size:0.8rem;">Cuántas unidades trae el paquete (ej: 20, 100)</small>
+      </div>
+      <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem;">
+        {{ form.activo }}
+        <label class="form-label" style="margin: 0;">Producto activo</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom: 1rem;">Escalas de precio</h3>
+      <p style="font-size: 0.82rem; color: #666; margin-bottom: 0.8rem;">
+        Define rangos de cantidad con precios especiales. Si no hay escalas, se usa el precio base por unidad.
+      </p>
+
+      {{ escala_formset.management_form }}
+
+      <div id="escalas-container">
+        {% for escala_form in escala_formset %}
+        <div class="escala-row" style="background: #f9f9f9; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.6rem; border: 1px solid var(--maxi-teal);">
+          {{ escala_form.id }}
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+            <div class="form-group" style="grid-column: 1/-1;">
+              <label class="form-label" style="font-size:0.8rem;">Nombre de escala</label>
+              {{ escala_form.nombre_escala }}
+            </div>
+            <div class="form-group">
+              <label class="form-label" style="font-size:0.8rem;">Cantidad mínima</label>
+              {{ escala_form.cantidad_minima }}
+            </div>
+            <div class="form-group">
+              <label class="form-label" style="font-size:0.8rem;">Cantidad máxima</label>
+              {{ escala_form.cantidad_maxima }}
+            </div>
+            <div class="form-group">
+              <label class="form-label" style="font-size:0.8rem;">Precio/unidad</label>
+              {{ escala_form.precio_unitario }}
+            </div>
+            <div class="form-group">
+              <label class="form-label" style="font-size:0.8rem;">Descuento %</label>
+              {{ escala_form.descuento_porcentaje }}
+            </div>
+          </div>
+          {% if escala_form.instance.pk %}
+          <div style="display: flex; align-items: center; gap: 0.3rem; margin-top: 0.3rem;">
+            {{ escala_form.DELETE }}
+            <label style="font-size: 0.8rem; color: #c0392b;">Eliminar esta escala</label>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 0.8rem;">
+    <button type="submit" class="btn btn-cta">
+      {% if editando %}Guardar cambios{% else %}Crear producto{% endif %}
+    </button>
+    <a href="{% url 'lista_productos' %}" class="btn btn-outline">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

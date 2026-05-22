@@ -1,0 +1,207 @@
+{% extends "productos/base.html" %}
+{% load maxi_tags %}
+
+{% block title %}Importar desde Excel — Maxi Plásticos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Importar productos desde Excel</h1>
+  <a href="{% url 'lista_productos' %}" class="btn btn-outline">← Volver</a>
+</div>
+
+{% if not preview %}
+<!-- PASO 1: Subir archivo -->
+<div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; align-items: start;">
+
+  <div class="card">
+    <h3 style="margin-bottom: 1rem;">Seleccionar archivo</h3>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="preview">
+
+      <div class="form-group">
+        <label class="form-label">Archivo Excel (.xlsx)</label>
+        <input
+          type="file"
+          name="archivo_excel"
+          accept=".xlsx,.xls"
+          class="form-control"
+          required
+          id="file-input"
+        >
+        <small style="color:#777; font-size: 0.8rem; margin-top: 0.3rem; display: block;">
+          Máximo ~5.000 filas recomendado
+        </small>
+      </div>
+
+      <div id="file-info" style="display:none; margin-bottom: 0.8rem; padding: 0.5rem 0.8rem; background: #f0faf0; border-radius: 8px; font-size: 0.85rem; color: var(--maxi-verde-bosque);">
+      </div>
+
+      <button type="submit" class="btn btn-cta">Vista previa →</button>
+    </form>
+  </div>
+
+  <div class="card" style="background: #f9ffe8;">
+    <h3 style="margin-bottom: 0.8rem;">Formato esperado</h3>
+    <p style="font-size: 0.82rem; color: #555; margin-bottom: 0.8rem;">
+      El sistema detecta las columnas automáticamente. Los nombres de columna aceptados son flexibles
+      (no importan mayúsculas ni tildes).
+    </p>
+
+    <table style="font-size: 0.8rem; margin-bottom: 0.8rem;">
+      <tr>
+        <th>Columna de tu Excel</th>
+        <th>También acepta</th>
+        <th>Oblig.</th>
+      </tr>
+      <tr>
+        <td><strong>0000000</strong></td>
+        <td>codigo, referencia, sku, ref</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><strong>Nombre del producto</strong></td>
+        <td>nombre, producto, item</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Costo</strong></td>
+        <td>cost, precio costo, precio compra</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><strong>Markup</strong></td>
+        <td>margen, margin, mark up</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><strong>Precio</strong></td>
+        <td>precio_base, valor, pvp</td>
+        <td>✅</td>
+      </tr>
+      <tr>
+        <td><strong>Impuesto</strong></td>
+        <td>iva, tax, % impuesto</td>
+        <td></td>
+      </tr>
+    </table>
+
+    <p style="font-size: 0.78rem; color: #777;">
+      También puedes incluir columnas de escalas:<br>
+      <code>escala1_nombre</code>, <code>min1</code>, <code>max1</code>, <code>precio1</code><br>
+      <code>escala2_nombre</code>, <code>min2</code>, <code>max2</code>, <code>precio2</code> … hasta escala5
+    </p>
+
+    <div style="margin-top: 0.8rem; padding: 0.6rem; background: var(--maxi-teal); border-radius: 8px; font-size: 0.78rem; color: var(--maxi-verde-bosque);">
+      <strong>Tu formato exacto (ya reconocido):</strong><br>
+      <code>0000000 | Nombre del producto | Costo | Markup | Precio | Impuesto</code><br>
+      <code>VP-001&nbsp;&nbsp; | Vasos desech. 7oz&nbsp;&nbsp; | 8000&nbsp; | 50&nbsp;&nbsp;&nbsp; | 12000&nbsp;| 19</code>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<!-- PASO 2: Vista previa y confirmar -->
+<div class="card" style="margin-bottom: 1rem; border-color: {% if errores %}var(--maxi-rojo-cta){% else %}var(--maxi-verde-marca){% endif %};">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+    <div>
+      <strong>{{ total_filas }} productos encontrados</strong>
+      {% if errores %}
+        &middot; <span style="color: var(--maxi-rojo-cta);">{{ errores|length }} advertencia(s)</span>
+      {% endif %}
+    </div>
+    <span style="font-size: 0.82rem; color: #777;">Mostrando primeros {{ filas|length }}</span>
+  </div>
+</div>
+
+{% if errores %}
+<div class="card" style="margin-bottom: 1rem; background: #fff8f8; border-color: var(--maxi-rojo-cta);">
+  <h4 style="color: var(--maxi-rojo-cta); margin-bottom: 0.5rem;">Advertencias</h4>
+  <ul style="font-size: 0.82rem; padding-left: 1.2rem;">
+    {% for e in errores %}<li>{{ e }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom: 1rem; overflow-x: auto;">
+  <table style="font-size: 0.82rem; min-width: 700px;">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Código</th>
+        <th>Nombre</th>
+        <th>Categoría</th>
+        <th>Costo</th>
+        <th>Precio</th>
+        <th>IVA %</th>
+        <th>Paquete</th>
+        <th>Escalas</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in filas %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td style="color: #777; font-size: 0.78rem;">{{ f.codigo|default:"—" }}</td>
+        <td><strong>{{ f.nombre }}</strong></td>
+        <td>{{ f.categoria|default:"—" }}</td>
+        <td>{{ f.costo|cop }}</td>
+        <td>{{ f.precio_base|cop }}</td>
+        <td>{{ f.impuesto }}%</td>
+        <td>{{ f.unidad_paquete }}</td>
+        <td>
+          {% for e in f.escalas %}
+            <span class="badge" style="font-size: 0.68rem;">{{ e.nombre_escala }}: ${{ e.precio_unitario }}</span>
+          {% empty %}—{% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if total_filas > 20 %}
+    <p style="text-align: center; color: #777; font-size: 0.82rem; margin-top: 0.5rem;">
+      ... y {{ total_filas|add:"-20" }} más
+    </p>
+  {% endif %}
+</div>
+
+<!-- Confirmar importación -->
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="importar">
+
+  <div class="card" style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <input type="checkbox" name="actualizar_existentes" id="actualizar" class="form-check-input">
+      <label for="actualizar" style="font-weight: 700; font-size: 0.9rem;">
+        Actualizar productos que ya existen (mismo nombre o código)
+      </label>
+    </div>
+    <p style="font-size: 0.78rem; color: #666; margin: 0; flex-basis: 100%;">
+      Si ya importaste este archivo antes y no marcas esta opción, los productos existentes se omitirán y no se modificarán.
+    </p>
+    <div style="display: flex; gap: 0.8rem; margin-left: auto;">
+      <a href="{% url 'importar_productos' %}" class="btn btn-outline">← Cambiar archivo</a>
+      <button type="submit" class="btn btn-cta">
+        Importar {{ total_filas }} productos
+      </button>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('file-input')?.addEventListener('change', function() {
+  const info = document.getElementById('file-info');
+  if (this.files.length > 0) {
+    const f = this.files[0];
+    const kb = (f.size / 1024).toFixed(1);
+    info.textContent = `📄 ${f.name} (${kb} KB)`;
+    info.style.display = 'block';
+  }
+});
+</script>
+{% endblock %}

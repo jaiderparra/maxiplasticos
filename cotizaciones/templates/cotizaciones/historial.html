@@ -1,0 +1,65 @@
+{% extends "productos/base.html" %}
+{% load maxi_tags %}
+{% block title %}Historial de Cotizaciones — Maxi Plásticos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Historial de Cotizaciones</h1>
+  <a href="{% url 'nueva_cotizacion' %}" class="btn btn-cta">+ Nueva cotización</a>
+</div>
+
+{% if cotizaciones %}
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>Número</th>
+        <th>Cliente</th>
+        <th>Estado</th>
+        <th>Total</th>
+        <th>Ganancia</th>
+        <th>Fecha</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cot in cotizaciones %}
+      <tr>
+        <td><strong>{{ cot.numero }}</strong></td>
+        <td>{{ cot.cliente_nombre }}</td>
+        <td><span class="badge">{{ cot.get_estado_display }}</span></td>
+        <td><strong>{{ cot.total|cop }}</strong></td>
+        <td style="color: var(--maxi-verde-marca);">{{ cot.ganancia_total|cop }}</td>
+        <td style="font-size: 0.85rem;">{{ cot.created_at|date:"d/m/Y H:i" }}</td>
+        <td>
+          <a href="{% url 'detalle_cotizacion' cot.pk %}" class="btn btn-verde btn-sm">Ver</a>
+          <a href="{% url 'eliminar_cotizacion' cot.pk %}" class="btn btn-danger btn-sm"
+             onclick="return confirm('¿Eliminar {{ cot.numero }}?')">Eliminar</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if is_paginated %}
+<div style="display: flex; gap: 0.4rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;">
+  {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-sm">← Anterior</a>
+  {% endif %}
+  <span style="padding: 0.3rem 0.8rem; font-weight: 700;">
+    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+  </span>
+  {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-sm">Siguiente →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card" style="text-align: center; padding: 2.5rem;">
+  <p style="font-size: 1.1rem; margin-bottom: 1rem;">No hay cotizaciones aún.</p>
+  <a href="{% url 'nueva_cotizacion' %}" class="btn btn-cta">Crear primera cotización</a>
+</div>
+{% endif %}
+{% endblock %}

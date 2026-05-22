@@ -1,0 +1,21 @@
+{% extends "productos/base.html" %}
+
+{% block title %}Eliminar producto — Maxi Plásticos{% endblock %}
+
+{% block content %}
+<div style="max-width: 500px; margin: 3rem auto;">
+  <div class="card" style="text-align: center; padding: 2rem;">
+    <h2 style="color: var(--maxi-rojo-cta); margin-bottom: 1rem;">Eliminar producto</h2>
+    <p style="margin-bottom: 0.5rem;">¿Estás seguro que deseas eliminar:</p>
+    <p style="font-weight: 800; font-size: 1.1rem; margin-bottom: 1.5rem;">{{ object.nombre }}</p>
+    <p style="font-size: 0.85rem; color: #777; margin-bottom: 1.5rem;">Esta acción no se puede deshacer.</p>
+    <form method="post">
+      {% csrf_token %}
+      <div style="display: flex; gap: 0.8rem; justify-content: center;">
+        <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+        <a href="{% url 'lista_productos' %}" class="btn btn-outline">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends "productos/base.html" %}
+{% load maxi_tags %}
+{% block title %}{{ producto.nombre }} — Maxi Plásticos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ producto.nombre }}</h1>
+  <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+    <a href="{% url 'lista_productos' %}" class="btn btn-outline">← Catálogo</a>
+    <a href="{% url 'nueva_cotizacion' %}" class="btn btn-cta">Cotizar →</a>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+  <div class="card">
+    <h3 style="margin-bottom: 0.8rem;">Información del producto</h3>
+    <table>
+      <tr><th>Campo</th><th>Valor</th></tr>
+      <tr><td>Categoría</td><td>{{ producto.categoria|default:"—" }}</td></tr>
+      <tr><td>Descripción</td><td>{{ producto.descripcion|default:"—" }}</td></tr>
+      <tr><td>Precio del paquete</td><td>{{ producto.precio_base|cop }}</td></tr>
+      <tr><td>Unidades por paquete</td><td>{{ producto.unidad_paquete }}</td></tr>
+      <tr>
+        <td><strong>Precio por unidad</strong></td>
+        <td><strong>{{ producto.precio_por_unidad|cop }}</strong></td>
+      </tr>
+      <tr><td>Estado</td>
+        <td>
+          {% if producto.activo %}
+            <span class="badge" style="background: var(--maxi-verde-marca); color: white;">Activo</span>
+          {% else %}
+            <span class="badge" style="background: #ccc; color: #333;">Inactivo</span>
+          {% endif %}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom: 0.8rem;">Escalas de precio</h3>
+    {% if escalas %}
+    <table>
+      <tr>
+        <th>Escala</th>
+        <th>Desde</th>
+        <th>Hasta</th>
+        <th>$/unidad</th>
+        <th>Desc %</th>
+      </tr>
+      {% for e in escalas %}
+      <tr>
+        <td><span class="badge">{{ e.nombre_escala }}</span></td>
+        <td>{{ e.cantidad_minima }}</td>
+        <td>{{ e.cantidad_maxima|default:"∞" }}</td>
+        <td>{{ e.precio_unitario|cop }}</td>
+        <td>{{ e.descuento_porcentaje }}%</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+      <p style="color: #777; font-size: 0.9rem;">Sin escalas definidas. Se usará precio base unitario.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Calculadora de precio -->
+<div class="card">
+  <h3 style="margin-bottom: 1rem;">Calculadora de precio</h3>
+  <div style="display: flex; gap: 0.8rem; align-items: flex-end; flex-wrap: wrap;">
+    <div class="form-group" style="margin-bottom: 0; flex: 1; min-width: 150px;">
+      <label class="form-label">Cantidad a calcular</label>
+      <input type="number" id="calc-cantidad" class="form-control" min="1" value="1" placeholder="Cantidad">
+    </div>
+    <button onclick="calcularPrecio()" class="btn btn-cta">Calcular</button>
+  </div>
+  <div id="calc-resultado" style="margin-top: 1rem; display: none;">
+    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+      <div class="card" style="flex: 1; min-width: 140px; border-color: var(--maxi-teal);">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #777;">ESCALA APLICADA</div>
+        <div id="res-escala" style="font-size: 1.1rem; font-weight: 800;"></div>
+      </div>
+      <div class="card" style="flex: 1; min-width: 140px;">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #777;">PRECIO / UNIDAD</div>
+        <div id="res-precio" style="font-size: 1.1rem; font-weight: 800; color: var(--maxi-verde-bosque);"></div>
+      </div>
+      <div class="card" style="flex: 1; min-width: 140px; border-color: var(--maxi-rojo-cta);">
+        <div style="font-size: 0.78rem; font-weight: 700; color: #777;">TOTAL A PAGAR</div>
+        <div id="res-total" style="font-size: 1.2rem; font-weight: 800; color: var(--maxi-rojo-cta);"></div>
+      </div>
+    </div>
+    <div style="margin-top: 0.8rem;">
+      <a id="link-cotizar" href="{% url 'nueva_cotizacion' %}?producto={{ producto.pk }}"
+         class="btn btn-cta" style="width: 100%; text-align: center; display: block;">
+        Cotizar este producto →
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function fmt(n) {
+  return '$' + Math.round(n).toLocaleString('es-CO');
+}
+function calcularPrecio() {
+  const cantidad = document.getElementById('calc-cantidad').value;
+  if (!cantidad || cantidad < 1) return;
+  fetch(`{% url 'calcular_precio' %}?producto_id={{ producto.pk }}&cantidad=${cantidad}`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('res-escala').textContent = data.escala;
+      document.getElementById('res-precio').textContent = fmt(data.precio_unitario);
+      document.getElementById('res-total').textContent  = fmt(data.subtotal);
+      document.getElementById('calc-resultado').style.display = 'block';
+    })
+    .catch(() => alert('Error al calcular. Verifica tu conexión.'));
+}
+document.getElementById('calc-cantidad').addEventListener('keydown', e => {
+  if (e.key === 'Enter') calcularPrecio();
+});
+</script>
+{% endblock %}

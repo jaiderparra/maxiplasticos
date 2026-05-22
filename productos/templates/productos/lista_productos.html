@@ -1,0 +1,252 @@
+{% extends "productos/base.html" %}
+{% load maxi_tags %}
+{% block title %}Catálogo — Maxi Plásticos{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Catálogo de Productos</h1>
+    <p style="font-size: 0.88rem; color: #555; margin-top: 0.2rem;">
+      Escribe el nombre del producto y cotiza al instante
+    </p>
+  </div>
+  <a href="{% url 'nueva_cotizacion' %}" class="btn btn-cta">Ir al cotizador →</a>
+</div>
+
+<!-- ── Buscador live ── -->
+<div style="margin-bottom: 0.8rem; position: relative;">
+  <input
+    type="text"
+    id="buscar-catalogo"
+    class="form-control"
+    placeholder="Buscar producto… ej: vaso, servilleta, plato…"
+    autocomplete="off"
+    style="font-size: 1rem; padding: 0.7rem 1rem;"
+    value="{{ busqueda }}"
+  >
+  <span id="conteo-catalogo" style="position:absolute; right:1rem; top:50%; transform:translateY(-50%);
+        font-size:0.78rem; color:#aaa; pointer-events:none;"></span>
+</div>
+
+<!-- Filtro por categoría -->
+{% if categorias %}
+<div style="margin-bottom: 1rem; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center;">
+  <button onclick="filtrarCategoria('')"
+          class="btn btn-sm" id="cat-todos"
+          style="background: var(--maxi-verde-bosque); color: white;">
+    Todas
+  </button>
+  {% for cat in categorias %}
+    {% if cat %}
+    <button onclick="filtrarCategoria('{{ cat|escapejs }}')"
+            class="btn btn-sm btn-outline cat-btn" data-cat="{{ cat }}">
+      {{ cat }}
+    </button>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Grid de búsqueda live (JS) -->
+<div id="grid-live" style="display: none;">
+  <div id="resultados-live" class="grid-2"></div>
+  <p id="sin-resultados" style="display:none; text-align:center; color:#aaa; padding:2rem;">
+    No se encontraron productos. Intenta con otro nombre.
+  </p>
+</div>
+
+<!-- Grid paginado (servidor) — visible cuando no hay búsqueda -->
+<div id="grid-server">
+  {% if productos %}
+  <div class="grid-2">
+    {% for producto in productos %}
+    <div class="card" style="display: flex; flex-direction: column; gap: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.3rem;">
+        <h3 style="font-size: 0.95rem; line-height: 1.3;">{{ producto.nombre }}</h3>
+        {% if producto.categoria %}
+          <span class="badge" style="flex-shrink:0;">{{ producto.categoria }}</span>
+        {% endif %}
+      </div>
+
+      {% if producto.descripcion %}
+        <p style="font-size: 0.82rem; color: #555;">{{ producto.descripcion|truncatechars:80 }}</p>
+      {% endif %}
+
+      <div style="font-size: 0.85rem;">
+        <span style="font-weight: 700;">{{ producto.precio_por_unidad|cop }}/u</span>
+        <span style="color: #888; margin-left: 0.4rem;">· paquete {{ producto.unidad_paquete }} uds</span>
+      </div>
+
+      {% if producto.escalas.all %}
+      <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+        {% for escala in producto.escalas.all %}
+          <span class="badge" style="font-size: 0.68rem;">
+            {{ escala.nombre_escala }}: {{ escala.precio_unitario|cop }}/u
+          </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div style="display: flex; gap: 0.5rem; margin-top: auto; padding-top: 0.4rem;">
+        <a href="{% url 'nueva_cotizacion' %}?producto={{ producto.pk }}"
+           class="btn btn-cta btn-sm" style="flex: 1; text-align: center;">
+          Cotizar →
+        </a>
+        <a href="{% url 'detalle_producto' producto.pk %}" class="btn btn-outline btn-sm">
+          Ver
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Paginación -->
+  {% if is_paginated %}
+  <div id="paginacion" style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1.5rem; flex-wrap: wrap;">
+    {% if page_obj.has_previous %}
+      <a href="?page=1" class="btn btn-outline btn-sm">« Primera</a>
+      <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-sm">‹ Anterior</a>
+    {% endif %}
+    <span style="font-size: 0.9rem; padding: 0.4rem 0.8rem; background: var(--maxi-blanco); border-radius: 8px; border: 1px solid var(--maxi-teal);">
+      Página <strong>{{ page_obj.number }}</strong> / <strong>{{ page_obj.paginator.num_pages }}</strong>
+      &nbsp;·&nbsp; {{ total_productos }} productos
+    </span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-sm">Siguiente ›</a>
+      <a href="?page={{ page_obj.paginator.num_pages }}" class="btn btn-outline btn-sm">Última »</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="card" style="text-align: center; padding: 2.5rem;">
+    <p style="font-size: 1.1rem; margin-bottom: 1rem;">No hay productos disponibles.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CATALOGO = {{ catalogo_json|safe }};
+let categoriaActiva = '';
+
+// ── Filtrar por categoría ──
+function filtrarCategoria(cat) {
+  categoriaActiva = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    b.style.background = b.dataset.cat === cat ? 'var(--maxi-verde-bosque)' : '';
+    b.style.color = b.dataset.cat === cat ? 'white' : '';
+  });
+  document.getElementById('cat-todos').style.background =
+    cat === '' ? 'var(--maxi-verde-bosque)' : 'transparent';
+  document.getElementById('cat-todos').style.color =
+    cat === '' ? 'white' : 'var(--maxi-verde-bosque)';
+
+  const q = document.getElementById('buscar-catalogo').value.trim();
+  if (q.length >= 1 || cat !== '') {
+    aplicarFiltro(q);
+  } else {
+    mostrarServidor();
+  }
+}
+
+// ── Buscador live ──
+let busTimer;
+document.getElementById('buscar-catalogo').addEventListener('input', function () {
+  clearTimeout(busTimer);
+  const q = this.value.trim();
+  busTimer = setTimeout(() => aplicarFiltro(q), 200);
+});
+
+function aplicarFiltro(q) {
+  const ql = q.toLowerCase();
+  let filtrados = CATALOGO;
+
+  if (ql.length >= 1) {
+    filtrados = filtrados.filter(p =>
+      p.nombre.toLowerCase().includes(ql) ||
+      p.categoria.toLowerCase().includes(ql)
+    );
+  }
+  if (categoriaActiva) {
+    filtrados = filtrados.filter(p => p.categoria === categoriaActiva);
+  }
+
+  if (ql.length >= 1 || categoriaActiva) {
+    mostrarLive(filtrados, q);
+  } else {
+    mostrarServidor();
+  }
+}
+
+function mostrarLive(lista, q) {
+  document.getElementById('grid-server').style.display = 'none';
+  document.getElementById('grid-live').style.display = 'block';
+  document.getElementById('conteo-catalogo').textContent =
+    lista.length > 0 ? `${lista.length} resultado${lista.length !== 1 ? 's' : ''}` : '';
+
+  const grid = document.getElementById('resultados-live');
+  const sinRes = document.getElementById('sin-resultados');
+
+  if (lista.length === 0) {
+    grid.innerHTML = '';
+    sinRes.style.display = 'block';
+    return;
+  }
+  sinRes.style.display = 'none';
+
+  // Máximo 48 resultados en live para no saturar
+  const mostrar = lista.slice(0, 48);
+  grid.innerHTML = mostrar.map(p => {
+    const nombre = q ? resaltar(p.nombre, q) : p.nombre;
+    return `
+      <div class="card" style="display:flex; flex-direction:column; gap:0.4rem;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.3rem;">
+          <h3 style="font-size:0.95rem; line-height:1.3;">${nombre}</h3>
+          ${p.categoria ? `<span class="badge" style="flex-shrink:0; font-size:0.7rem;">${p.categoria}</span>` : ''}
+        </div>
+        <div style="font-size:0.85rem;">
+          <span style="font-weight:700;">$${fmt(p.precio_unitario)}/u</span>
+        </div>
+        <div style="display:flex; gap:0.5rem; margin-top:auto; padding-top:0.4rem;">
+          <a href="/cotizaciones/nueva/?producto=${p.id}"
+             class="btn btn-cta btn-sm" style="flex:1; text-align:center;">
+            Cotizar →
+          </a>
+          <a href="/${p.id}/" class="btn btn-outline btn-sm">Ver</a>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (lista.length > 48) {
+    grid.insertAdjacentHTML('beforeend',
+      `<p style="grid-column:1/-1; text-align:center; color:#aaa; font-size:0.85rem; padding:0.5rem;">
+        Mostrando 48 de ${lista.length}. Escribe más letras para afinar.
+      </p>`);
+  }
+}
+
+function mostrarServidor() {
+  document.getElementById('grid-server').style.display = 'block';
+  document.getElementById('grid-live').style.display = 'none';
+  document.getElementById('conteo-catalogo').textContent = '';
+}
+
+function resaltar(texto, q) {
+  const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return texto.replace(re, '<mark style="background:var(--maxi-lima);border-radius:2px;">$1</mark>');
+}
+
+function fmt(n) {
+  return Math.round(n).toLocaleString('es-CO');
+}
+
+// Inicializar con valor previo (si venía de la URL)
+window.addEventListener('DOMContentLoaded', () => {
+  const q = document.getElementById('buscar-catalogo').value.trim();
+  if (q) aplicarFiltro(q);
+});
+</script>
+{% endblock %}
