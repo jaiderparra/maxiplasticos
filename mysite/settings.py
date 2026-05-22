@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -10,16 +9,17 @@ SECRET_KEY = os.environ.get(
     'django-insecure-j(ch$jpgp#@lbnz^s3ih)@tu+@zfotbwy6h@zj7i#sj5qlfm='
 )
 
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost 127.0.0.1').split()
+ALLOWED_HOSTS = os.environ.get(
+    'ALLOWED_HOSTS',
+    'localhost 127.0.0.1'
+).split()
 
-# Construye CSRF_TRUSTED_ORIGINS automáticamente desde ALLOWED_HOSTS
-# asegurando que cada entrada tenga el esquema https://
-_raw_csrf = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+# CSRF: construye automáticamente desde ALLOWED_HOSTS con https://
 CSRF_TRUSTED_ORIGINS = []
-for _h in (_raw_csrf.split() if _raw_csrf else ALLOWED_HOSTS):
-    if _h.startswith('http://') or _h.startswith('https://'):
+for _h in ALLOWED_HOSTS:
+    if _h.startswith('http'):
         CSRF_TRUSTED_ORIGINS.append(_h)
     elif _h not in ('localhost', '127.0.0.1', '*'):
         CSRF_TRUSTED_ORIGINS.append(f'https://{_h}')
@@ -66,20 +66,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'mysite.wsgi.application'
 
-# ── Base de datos ──────────────────────────────────────────────────────────
-# En Railway se inyecta DATABASE_URL automáticamente con PostgreSQL.
-# En desarrollo local se usa SQLite.
-DATABASE_URL = os.environ.get('DATABASE_URL')
-
-if DATABASE_URL:
-    DATABASES = {'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+# ── Base de datos — SQLite (incluida con Django, sin dependencias externas) ─
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
+}
 
 # ── Contraseñas ────────────────────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [
@@ -95,20 +88,19 @@ TIME_ZONE     = 'America/Bogota'
 USE_I18N      = True
 USE_TZ        = True
 
-# ── Archivos estáticos ─────────────────────────────────────────────────────
+# ── Archivos estáticos (WhiteNoise los sirve desde staticfiles/) ───────────
 STATIC_URL  = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 STORAGES = {
     'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
-    # CompressedStaticFilesStorage: comprime gzip pero NO usa manifiesto hash,
-    # evita el ValueError cuando el manifiesto no existe en Railway.
     'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── Sesiones ───────────────────────────────────────────────────────────────
-SESSION_ENGINE       = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_AGE   = 86400  # 24 horas
+SESSION_ENGINE     = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 86400  # 24 horas
+
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB para importar Excel

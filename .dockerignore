@@ -1,0 +1,29 @@
+# Control de versiones
+.git
+.gitignore
+
+# Entornos virtuales
+venv/
+env/
+.env/
+
+# Archivos de desarrollo
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Datos locales (la BD se crea dentro del contenedor)
+db.sqlite3
+
+# Archivos sensibles
+.env
+*.xlsx
+*.xls
+
+# Estáticos colectados (se generan en el build)
+staticfiles/
+
+# Documentación/Claude
+*.md
+*.skill
