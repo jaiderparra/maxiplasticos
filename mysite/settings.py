@@ -14,10 +14,15 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost 127.0.0.1').split()
 
-CSRF_TRUSTED_ORIGINS = [
-    h for h in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split()
-    if h
-]
+# Construye CSRF_TRUSTED_ORIGINS automáticamente desde ALLOWED_HOSTS
+# asegurando que cada entrada tenga el esquema https://
+_raw_csrf = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+CSRF_TRUSTED_ORIGINS = []
+for _h in (_raw_csrf.split() if _raw_csrf else ALLOWED_HOSTS):
+    if _h.startswith('http://') or _h.startswith('https://'):
+        CSRF_TRUSTED_ORIGINS.append(_h)
+    elif _h not in ('localhost', '127.0.0.1', '*'):
+        CSRF_TRUSTED_ORIGINS.append(f'https://{_h}')
 
 # ── Apps ───────────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
